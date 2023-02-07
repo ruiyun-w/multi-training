@@ -22,6 +22,13 @@
 #include <multiTrainingEvaluator.h>
 #include <timer.h>
 #include <OpenXLSX.hpp>
+#include <tchar.h>
+#include <thread>
+#include <mutex>
+#include "MidiFile.h"
+#include "Options.h"
+#include <iostream>
+#include <iomanip>
 
 
 using namespace std;
@@ -37,6 +44,10 @@ using namespace OpenXLSX;
 bool s_isRunning = true;
 bool s_spaceHit = false;
 int timer_start = 0;
+int totalJumpPer = 0;
+float aveJumpPer = 0;
+int midiInterval;
+int startTime;
 
 
 int64_t ProcessKey(void* /*context*/, int key)
@@ -79,9 +90,37 @@ void printAppUsage()
 	return;
 }
 
+void playMidi(HMIDIOUT h) {
+	const int SLEEP_INTERVAL = 10;
+	midiOutShortMsg(h, 0x73c0);  // 音色を定義 チェロ0x2a(42)
+	while (true){
+		if (midiInterval > 0) {
+			//int sleepedTime = 0;
+			midiOutShortMsg(h, 0x7f4390);  // 鍵盤を押す G5 0x43(67) 127 チェンネル0
+			//int endTime = clock();
+			Sleep(midiInterval);
+			//cout << endTime - startTime << endl;
+			//while (sleepedTime < midiInterval) {
+			//	Sleep(SLEEP_INTERVAL);
+			//	sleepedTime = sleepedTime + SLEEP_INTERVAL;
+			//}
+		}
+	}
+
+}
+
+void stopMidi(HMIDIOUT h) {
+	int preInterval = 5000;
+	while (true) {
+		if (midiInterval - preInterval > 5000) {
+			midiOutReset(h);
+		}
+	preInterval = midiInterval;
+	}
+}
+
 int main()
 {   
-
 	//open k4a device
 	k4a_device_t device = NULL;
 	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
@@ -109,6 +148,11 @@ int main()
 
 	//Create training evaluator
 	multiEvaluator evaluator;
+
+	//creat excel file to write angle data
+	XLDocument doc;
+	doc.create(".//multiTest.xlsx");
+	auto wks = doc.workbook().worksheet("Sheet1");
 
 	// Display sound informations, including vocals, 
 	sf::SoundBuffer buffer_vocals;
@@ -154,11 +198,19 @@ int main()
 	sound_drums.setVolume(0);
 
 	//Play music
-	sound_vocals.play();
+	/*sound_vocals.play();
 	sound_other.play();
 	sound_bass.play();
-	sound_drums.play();
+	sound_drums.play();*/
 	
+	// Create MIDI player
+	HMIDIOUT h;
+	midiOutOpen(&h, MIDI_MAPPER, 0, 0, 0);
+	thread playMidiThread(playMidi, h);
+	playMidiThread.detach();
+	thread stopMidiThread(stopMidi, h);
+	stopMidiThread.detach();
+
 	//start camera
 	while (s_isRunning)
 	{
@@ -186,6 +238,7 @@ int main()
 			k4a_wait_result_t pop_frame_result = k4abt_tracker_pop_result(tracker, &body_frame, K4A_WAIT_INFINITE);
 			if (pop_frame_result == K4A_WAIT_RESULT_SUCCEEDED)
 			{
+				totalJumpPer = 0;
 				// Successfully popped the body tracking result. Start processing
 				k4a_capture_t original_capture = k4abt_frame_get_capture(body_frame);
 				size_t num_bodies = k4abt_frame_get_num_bodies(body_frame);
@@ -196,28 +249,42 @@ int main()
 					VERIFY(k4abt_frame_get_body_skeleton(body_frame, i, &body.skeleton), "Get skeleton from body frame failed!");
 					body.id = k4abt_frame_get_body_id(body_frame, i);
 					float score = evaluator.vectorEvaluator(body);
+					int jumpPer = evaluator.jumpCounter(body, i, wks);
 					switch (body.id)
 					{
 					case 1:
 						sound_vocals.setVolume(score);
-						printf("1st people score: %f ", score);
+						//printf("1st people score: %f ", score);
+						printf("1st people jump period: %d\n ", jumpPer);
 						break;
 					case 2:
 						sound_other.setVolume(score);
-						printf("2nd people score: %f ", score);
+						//printf("2nd people score: %f ", score);
+						printf("2nd people jump period: %d\n ", jumpPer);
 						break;
 					case 3:
 						sound_bass.setVolume(score);
-						printf("3rd people score: %f ", score);
+						//printf("3rd people score: %f ", score);
+						printf("3rd people jump period: %d\n ", jumpPer);
 						break;
 					case 4:
 						sound_drums.setVolume(score);
-						printf("4st people score: %f ", score);
+						//printf("4st people score: %f ", score);
+						printf("4st people jump period: %d\n", jumpPer);
 						break;
 					default:
-						printf("Evaluate 4 people most!");
+						printf("Evaluate 4 people most!\n");
 
 					}
+					totalJumpPer = totalJumpPer + jumpPer;
+				}
+				if (num_bodies > 0) 
+				{
+					aveJumpPer = totalJumpPer / num_bodies;
+					midiInterval = int(aveJumpPer);
+					//startTime = evaluator.startTime;
+					printf("The average jump period %f\n", aveJumpPer);
+					printf("The average jump period %d\n", midiInterval);
 				}
 
 				// Visualize point cloud
@@ -275,5 +342,7 @@ int main()
 	k4a_device_stop_cameras(device);
 	k4a_device_close(device);
 
+	midiOutReset(h);
+	midiOutClose(h);
 	return 0;
 }
