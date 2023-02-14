@@ -1,8 +1,7 @@
-Ôªø#pragma comment(lib, "winmm")
+#pragma comment(lib, "winmm")
 #pragma comment(lib, "k4a.lib")
 #pragma comment(lib, "k4abt.lib")
 #define _CRT_SECURE_NO_WARNINGS
-#include <SFML/Graphics.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <k4a/k4a.h>
@@ -14,25 +13,28 @@
 #include <audioclient.h>
 #include <mmsystem.h>
 #include <Mmsystem.h>
-#include <SFML/Audio.hpp>
 #include <string>
 #include <BodyTrackingHelpers.h>
 #include <Utilities.h>
 #include <Window3dWrapper.h>
 #include <multiTrainingEvaluator.h>
-#include <timer.h>
-#include <OpenXLSX.hpp>
 #include <tchar.h>
 #include <thread>
 #include <mutex>
-#include "MidiFile.h"
-#include "Options.h"
 #include <iostream>
 #include <iomanip>
+#include <OpenXLSX.hpp>
+#include "MidiFile.h"
+#include "Options.h"
+#include <iomanip>
+#include <cstdlib>
+#include "RtMidi.h"
+#include <Windows.h>
 
 
 using namespace std;
 using namespace OpenXLSX;
+using namespace smf;
 
 #define VERIFY(result, error)                                                                            \
     if(result != K4A_RESULT_SUCCEEDED)                                                                   \
@@ -42,11 +44,11 @@ using namespace OpenXLSX;
     }       
 
 bool s_isRunning = true;
-bool s_spaceHit = false;
 int timer_start = 0;
 int totalJumpPer = 0;
 float aveJumpPer = 0;
-int midiInterval;
+int midiInterval = 0;
+double tickDurationMilseconds;
 int startTime;
 
 
@@ -58,10 +60,9 @@ int64_t ProcessKey(void* /*context*/, int key)
 		// Quit
 	case GLFW_KEY_ESCAPE:
 		s_isRunning = false;
-		s_spaceHit = false;
 		break;
 	case GLFW_KEY_SPACE:
-		s_spaceHit = true;
+		s_isRunning = true;
 		break;
 	}
 	return 1;
@@ -73,30 +74,25 @@ int64_t CloseCallback(void* /*context*/)
 	return 1;
 }
 
-void playRemind(sf::Sound* sound)
-{
-	sound->play();
-	return;
-}
 
 void printAppUsage()
 {
 	printf("\n");
 	printf(" Basic Usage:\n\n");
 	printf(" 1. Make sure you place the camera parallel to the floor and there is only one person in the scene.\n");
-	printf(" 2. Hit 's' key to start training.\n");
+	printf(" 2. Hit 'space' key to start training.\n");
 	printf(" 3. Hit 'esc' key to stop app.\n");
 	printf("\n");
 	return;
 }
 
-void playMidi(HMIDIOUT h) {
+void playMidiDrum(HMIDIOUT h) {
 	const int SLEEP_INTERVAL = 10;
-	midiOutShortMsg(h, 0x73c0);  // Èü≥Ëâ≤„ÇíÂÆöÁæ© „ÉÅ„Çß„É≠0x2a(42)
-	while (true){
+	midiOutShortMsg(h, 0x73c0);  // âπêFÇíËã` É`ÉFÉç0x2a(42)
+	while (true) {
 		if (midiInterval > 0) {
 			//int sleepedTime = 0;
-			midiOutShortMsg(h, 0x7f4390);  // ÈçµÁõ§„ÇíÊäº„Åô G5 0x43(67) 127 „ÉÅ„Çß„É≥„Éç„É´0
+			midiOutShortMsg(h, 0x7f4390);  // åÆî’ÇâüÇ∑ G5 0x43(67) 127 É`ÉFÉìÉlÉã0
 			//int endTime = clock();
 			Sleep(midiInterval);
 			//cout << endTime - startTime << endl;
@@ -109,18 +105,38 @@ void playMidi(HMIDIOUT h) {
 
 }
 
+void playMidiFile(vector<MidiEvent*> noteOnEvent, RtMidiOut* midiout) {
+	while (true) {
+		if (tickDurationMilseconds > 0)
+		{
+			//play midi messages
+			for (int event = 1; event < noteOnEvent.size(); event++) {
+				midiout->sendMessage(noteOnEvent[event - 1]);
+				int tickDuration = noteOnEvent[event]->tick - noteOnEvent[event - 1]->tick;
+				if (tickDuration) {
+					Sleep(int(tickDuration * tickDurationMilseconds));
+					cout << tickDurationMilseconds << endl;
+				}
+				if (event == (noteOnEvent.size()))
+					event = 1;
+			}
+	    }
+	}
+}
+
+
 void stopMidi(HMIDIOUT h) {
 	int preInterval = 5000;
 	while (true) {
 		if (midiInterval - preInterval > 5000) {
 			midiOutReset(h);
 		}
-	preInterval = midiInterval;
+		preInterval = midiInterval;
 	}
 }
 
 int main()
-{   
+{
 	//open k4a device
 	k4a_device_t device = NULL;
 	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
@@ -139,6 +155,7 @@ int main()
 	// Create Body Tracker
 	k4abt_tracker_t tracker = NULL;
 	k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
+	tracker_config.processing_mode = K4ABT_TRACKER_PROCESSING_MODE_GPU;
 	VERIFY(k4abt_tracker_create(&sensor_calibration, tracker_config, &tracker), "Body tracker initialization failed!");
 	int frame_count = 0;
 	Window3dWrapper window3d;
@@ -149,67 +166,68 @@ int main()
 	//Create training evaluator
 	multiEvaluator evaluator;
 
-	//creat excel file to write angle data
+	//Creat excel file to write angle data
 	XLDocument doc;
 	doc.create(".//multiTest.xlsx");
 	auto wks = doc.workbook().worksheet("Sheet1");
 
-	// Display sound informations, including vocals, 
-	sf::SoundBuffer buffer_vocals;
-	if (!buffer_vocals.loadFromFile("..//media//South Of The Water//vocals.wav"))
-		return 0;
-	std::cout << "vocals.wav:" << std::endl;
-	std::cout << " " << buffer_vocals.getDuration().asSeconds() << " seconds" << std::endl;
-	std::cout << " " << buffer_vocals.getSampleRate() << " samples / sec" << std::endl;
-	std::cout << " " << buffer_vocals.getChannelCount() << " channels" << std::endl;
+	//Creat MIDI file player
+	RtMidiOut* midiout = new RtMidiOut();
+	MidiFile midifile("C:\\Users\\wangr\\training\\Midi_K525.mid");
+	vector<MidiEvent*> noteOnEvent;
 
-	sf::SoundBuffer buffer_other;
-	if (!buffer_other.loadFromFile("..//media//South Of The Water//other.wav"))
-		return 0;
-	std::cout << "other.wav:" << std::endl;
-	std::cout << " " << buffer_other.getDuration().asSeconds() << " seconds" << std::endl;
-	std::cout << " " << buffer_other.getSampleRate() << " samples / sec" << std::endl;
-	std::cout << " " << buffer_other.getChannelCount() << " channels" << std::endl;
+	//Creat midifile and print messages
+	midifile.doTimeAnalysis();
+	midifile.linkNotePairs();
+	midifile.joinTracks();
+	int tracks = midifile.getTrackCount();
+	cout << "TPQ: " << midifile.getTicksPerQuarterNote() << endl;
 
-	sf::SoundBuffer buffer_bass;
-	if (!buffer_bass.loadFromFile("..//media//South Of The Water//bass.wav"))
-		return 0;
-	std::cout << "bass.wav:" << std::endl;
-	std::cout << " " << buffer_bass.getDuration().asSeconds() << " seconds" << std::endl;
-	std::cout << " " << buffer_bass.getSampleRate() << " samples / sec" << std::endl;
-	std::cout << " " << buffer_bass.getChannelCount() << " channels" << std::endl;
+	if (tracks > 1) cout << "TRACKS: " << tracks << endl;
+	for (int track = 0; track < tracks; track++) {
+		if (tracks > 1) cout << "\nTrack " << track << endl;
+		cout << "Tick\tSeconds\tDur\tMessage" << endl;
+		for (int event = 0; event < midifile[track].size(); event++) {
+			cout << dec << midifile[track][event].tick;
+			cout << '\t' << dec << midifile[track][event].seconds;
+			cout << '\t';
+			if (midifile[track][event].isNoteOn())
+				cout << midifile[track][event].getDurationInSeconds();
+			cout << '\t' << hex;
+			for (int i = 0; i < midifile[track][event].size(); i++)
+				cout << int(midifile[track][event][i]) << ' ';
+			cout << endl;
+		}
+	}
 
-	sf::SoundBuffer buffer_drums;
-	if (!buffer_drums.loadFromFile("..//media//South Of The Water//drums.wav"))
-		return 0;
-	std::cout << "drums.wav:" << std::endl;
-	std::cout << " " << buffer_drums.getDuration().asSeconds() << " seconds" << std::endl;
-	std::cout << " " << buffer_drums.getSampleRate() << " samples / sec" << std::endl;
-	std::cout << " " << buffer_drums.getChannelCount() << " channels" << std::endl;
+	// Creat MidiEvent* vector
+	for (int track = 0; track < tracks; track++) {
+		for (int event = 0; event < midifile[track].size(); event++) {
+			if (midifile[track][event].isNoteOn()) {
+				noteOnEvent.push_back(&midifile[track][event]);
+			}
+		}
+	}
 
-	// Create a sound instance
-	sf::Sound sound_vocals(buffer_vocals);
-	sound_vocals.setVolume(0);
-	sf::Sound sound_other(buffer_other);
-	sound_other.setVolume(0);
-	sf::Sound sound_bass(buffer_bass);
-	sound_bass.setVolume(0);
-	sf::Sound sound_drums(buffer_drums);
-	sound_drums.setVolume(0);
+	// Check available ports.
+	unsigned int nPorts = midiout->getPortCount();
+	if (nPorts == 0) {
+		std::cout << "No ports available!\n";
+	}
 
-	//Play music
-	/*sound_vocals.play();
-	sound_other.play();
-	sound_bass.play();
-	sound_drums.play();*/
-	
-	// Create MIDI player
-	HMIDIOUT h;
-	midiOutOpen(&h, MIDI_MAPPER, 0, 0, 0);
-	thread playMidiThread(playMidi, h);
-	playMidiThread.detach();
-	thread stopMidiThread(stopMidi, h);
-	stopMidiThread.detach();
+	// Open first available port.
+	midiout->openPort(0);
+
+	// Start play midi tile thread 
+	thread playMidiFIleThread(playMidiFile, noteOnEvent, midiout);
+	playMidiFIleThread.detach();
+	//// Create MIDI player
+	//HMIDIOUT h;
+	//midiOutOpen(&h, MIDI_MAPPER, 0, 0, 0);
+	//thread playMidiThread(playMidiDrum, h);
+	//playMidiThread.detach();
+	//thread stopMidiThread(stopMidi, h);
+	//stopMidiThread.detach();
 
 	//start camera
 	while (s_isRunning)
@@ -243,48 +261,38 @@ int main()
 				k4a_capture_t original_capture = k4abt_frame_get_capture(body_frame);
 				size_t num_bodies = k4abt_frame_get_num_bodies(body_frame);
 				printf("%zu bodies are detected!\n", num_bodies);
-				for (size_t i = 0; i < num_bodies; i++)
+				if (num_bodies > 0)
 				{
-					k4abt_body_t body;
-					VERIFY(k4abt_frame_get_body_skeleton(body_frame, i, &body.skeleton), "Get skeleton from body frame failed!");
-					body.id = k4abt_frame_get_body_id(body_frame, i);
-					float score = evaluator.vectorEvaluator(body);
-					int jumpPer = evaluator.jumpCounter(body, i, wks);
-					switch (body.id)
+					for (size_t i = 0; i < num_bodies; i++)
 					{
-					case 1:
-						sound_vocals.setVolume(score);
-						//printf("1st people score: %f ", score);
-						printf("1st people jump period: %d\n ", jumpPer);
-						break;
-					case 2:
-						sound_other.setVolume(score);
-						//printf("2nd people score: %f ", score);
-						printf("2nd people jump period: %d\n ", jumpPer);
-						break;
-					case 3:
-						sound_bass.setVolume(score);
-						//printf("3rd people score: %f ", score);
-						printf("3rd people jump period: %d\n ", jumpPer);
-						break;
-					case 4:
-						sound_drums.setVolume(score);
-						//printf("4st people score: %f ", score);
-						printf("4st people jump period: %d\n", jumpPer);
-						break;
-					default:
-						printf("Evaluate 4 people most!\n");
+						k4abt_body_t body;
+						VERIFY(k4abt_frame_get_body_skeleton(body_frame, i, &body.skeleton), "Get skeleton from body frame failed!");
+						body.id = k4abt_frame_get_body_id(body_frame, i);
+						float score = evaluator.vectorEvaluator(body);
+						int jumpPer = evaluator.jumpCounter(body, i, wks);
+						switch (body.id)
+						{
+						case 1:
+							printf("1st people jump period: %d\n ", jumpPer);
+							break;
+						case 2:
+							printf("2nd people jump period: %d\n ", jumpPer);
+							break;
+						case 3:
+							printf("3rd people jump period: %d\n ", jumpPer);
+							break;
+						case 4:
+							printf("4st people jump period: %d\n", jumpPer);
+							break;
+						default:
+							printf("Evaluate 4 people most!\n");
 
+						}
+						totalJumpPer = totalJumpPer + jumpPer;
 					}
-					totalJumpPer = totalJumpPer + jumpPer;
-				}
-				if (num_bodies > 0) 
-				{
 					aveJumpPer = totalJumpPer / num_bodies;
-					midiInterval = int(aveJumpPer);
-					//startTime = evaluator.startTime;
 					printf("The average jump period %f\n", aveJumpPer);
-					printf("The average jump period %d\n", midiInterval);
+					tickDurationMilseconds = aveJumpPer / 4 / 480;
 				}
 
 				// Visualize point cloud
@@ -342,7 +350,8 @@ int main()
 	k4a_device_stop_cameras(device);
 	k4a_device_close(device);
 
-	midiOutReset(h);
-	midiOutClose(h);
+	delete midiout;
+	//midiOutReset(h);
+	//midiOutClose(h);
 	return 0;
 }
