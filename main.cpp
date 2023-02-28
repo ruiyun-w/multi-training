@@ -1,4 +1,4 @@
-#pragma comment(lib, "winmm")
+ï»¿#pragma comment(lib, "winmm")
 #pragma comment(lib, "k4a.lib")
 #pragma comment(lib, "k4abt.lib")
 #define _CRT_SECURE_NO_WARNINGS
@@ -88,11 +88,11 @@ void printAppUsage()
 
 void playMidiDrum(HMIDIOUT h) {
 	const int SLEEP_INTERVAL = 10;
-	midiOutShortMsg(h, 0x73c0);  // ‰¹F‚ð’è‹` ƒ`ƒFƒ0x2a(42)
+	midiOutShortMsg(h, 0x73c0);  // ï¿½ï¿½ï¿½Fï¿½ï¿½ï¿½` ï¿½`ï¿½Fï¿½ï¿½0x2a(42)
 	while (true) {
 		if (midiInterval > 0) {
 			//int sleepedTime = 0;
-			midiOutShortMsg(h, 0x7f4390);  // Œ®”Õ‚ð‰Ÿ‚· G5 0x43(67) 127 ƒ`ƒFƒ“ƒlƒ‹0
+			midiOutShortMsg(h, 0x7f4390);  // ï¿½ï¿½ï¿½Õ‚ï¿½ï¿½ï¿½ï¿½ï¿½ G5 0x43(67) 127 ï¿½`ï¿½Fï¿½ï¿½ï¿½lï¿½ï¿½0
 			//int endTime = clock();
 			Sleep(midiInterval);
 			//cout << endTime - startTime << endl;
@@ -120,7 +120,7 @@ void playMidiFile(vector<MidiEvent*> noteOnEvent, RtMidiOut* midiout) {
 				if (event == (noteOnEvent.size()))
 					event = 1;
 			}
-	    }
+		}
 	}
 }
 
@@ -173,7 +173,7 @@ int main()
 
 	//Creat MIDI file player
 	RtMidiOut* midiout = new RtMidiOut();
-	MidiFile midifile("C:\\Users\\wangr\\training\\Midi_K525.mid");
+	MidiFile midifile("D:\\training\\MultiTraining\\MultiTraining\\media\\Midi_K525.mid");
 	vector<MidiEvent*> noteOnEvent;
 
 	//Creat midifile and print messages
@@ -292,7 +292,7 @@ int main()
 					}
 					aveJumpPer = totalJumpPer / num_bodies;
 					printf("The average jump period %f\n", aveJumpPer);
-					tickDurationMilseconds = aveJumpPer / 4 / 480;
+					tickDurationMilseconds = aveJumpPer / 2 / 480;
 				}
 
 				// Visualize point cloud

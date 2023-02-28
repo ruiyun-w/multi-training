@@ -134,15 +134,18 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, XLWorksheet 
 
 	float ANGLE_ARM_LEFT_PELVIS = getAngle(P_PELVIS.position, P_NECK.position, P_WRIST_LEFT.position);
 	float ANGLE_ARM_RIGHT_PELVIS = getAngle(P_PELVIS.position, P_NECK.position, P_WRIST_RIGHT.position);
+	//
+	cout << body_num  << "ANGLE_ARM_RIGHT_PELVIS" << ANGLE_ARM_RIGHT_PELVIS << endl;
+	cout << body_num << "ANGLE_ARM_LEFT_PELVIS" << ANGLE_ARM_LEFT_PELVIS << endl;
 
 	milliseconds ms = duration_cast<milliseconds>(
 		system_clock::now().time_since_epoch()
 		);
 	//write angles to excel 
-	sheet.cell(angleRow[body_num], body_num + 1).value() = ms.count();
-	sheet.cell(angleRow[body_num], body_num + 2).value() = ANGLE_ARM_LEFT_PELVIS;
-	sheet.cell(angleRow[body_num], body_num + 3).value() = ANGLE_ARM_RIGHT_PELVIS;
-	angleRow[body_num] = angleRow[body_num] + 1;
+	//sheet.cell(angleRow[body_num], body_num + 1).value() = ms.count();
+	//sheet.cell(angleRow[body_num], body_num + 2).value() = ANGLE_ARM_LEFT_PELVIS;
+	//sheet.cell(angleRow[body_num], body_num + 3).value() = ANGLE_ARM_RIGHT_PELVIS;
+	//angleRow[body_num] = angleRow[body_num] + 1;
 
 	// if arms up
 	if ((ANGLE_ARM_LEFT_PELVIS > 100) && (ANGLE_ARM_RIGHT_PELVIS > 100) && (inJump[body_num] == false)) {
@@ -159,7 +162,7 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, XLWorksheet 
 		inJump[body_num] = true;
 	}
 	// if arms down
-	else if ((ANGLE_ARM_LEFT_PELVIS < 20) && (ANGLE_ARM_RIGHT_PELVIS < 20) && (inJump[body_num] == true)) {
+	else if ((ANGLE_ARM_LEFT_PELVIS < 30) && (ANGLE_ARM_RIGHT_PELVIS < 30) && (inJump[body_num] == true)) {
 		inJump[body_num] = false;
 		jumpCount[body_num] = jumpCount[body_num] + 1;
 		cout << jumpCount[body_num] << endl;
@@ -167,4 +170,3 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, XLWorksheet 
 
 	return jumpPeriod[body_num];
 }
-
