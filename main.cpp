@@ -31,10 +31,10 @@
 #include "RtMidi.h"
 #include <Windows.h>
 
-
 using namespace std;
 using namespace OpenXLSX;
 using namespace smf;
+
 
 #define VERIFY(result, error)                                                                            \
     if(result != K4A_RESULT_SUCCEEDED)                                                                   \
@@ -42,15 +42,17 @@ using namespace smf;
         printf("%s \n - (File: %s, Function: %s, Line: %d)\n", error, __FILE__, __FUNCTION__, __LINE__); \
         exit(1);                                                                                         \
     }       
-
+// control evaluation
 bool s_isRunning = true;
-int timer_start = 0;
+bool inJump = false;
 int totalJumpPer = 0;
 float aveJumpPer = 0;
 int midiInterval = 0;
+int jumpPer = 0;
 double tickDurationMilseconds;
-int startTime;
 
+//Create training evaluator
+multiEvaluator evaluator;
 
 int64_t ProcessKey(void* /*context*/, int key)
 {
@@ -60,9 +62,17 @@ int64_t ProcessKey(void* /*context*/, int key)
 		// Quit
 	case GLFW_KEY_ESCAPE:
 		s_isRunning = false;
+		inJump = false;
+		jumpPer = 0;
+		totalJumpPer = 0;
+		aveJumpPer = 0;
+		tickDurationMilseconds = 0;
+		evaluator.reset();
+		printf("STOPED");
 		break;
 	case GLFW_KEY_SPACE:
 		s_isRunning = true;
+		printf("RESTART");
 		break;
 	}
 	return 1;
@@ -79,47 +89,41 @@ void printAppUsage()
 {
 	printf("\n");
 	printf(" Basic Usage:\n\n");
-	printf(" 1. Make sure you place the camera parallel to the floor and there is only one person in the scene.\n");
-	printf(" 2. Hit 'space' key to start training.\n");
-	printf(" 3. Hit 'esc' key to stop app.\n");
+	printf(" 1. Make sure you place the camera parallel to the floor.\n");
+	printf(" 2. Hit 'space' key to start training evaluation.\n");
+	printf(" 3. Hit 'esc' key to stop training evaluation.\n");
 	printf("\n");
 	return;
 }
 
 void playMidiDrum(HMIDIOUT h) {
-	const int SLEEP_INTERVAL = 10;
-	midiOutShortMsg(h, 0x73c0);  // ���F���` �`�F��0x2a(42)
+	midiOutShortMsg(h, 0x73c0);  
 	while (true) {
 		if (midiInterval > 0) {
-			//int sleepedTime = 0;
-			midiOutShortMsg(h, 0x7f4390);  // ���Ղ����� G5 0x43(67) 127 �`�F���l��0
-			//int endTime = clock();
+			midiOutShortMsg(h, 0x7f4390);  
 			Sleep(midiInterval);
-			//cout << endTime - startTime << endl;
-			//while (sleepedTime < midiInterval) {
-			//	Sleep(SLEEP_INTERVAL);
-			//	sleepedTime = sleepedTime + SLEEP_INTERVAL;
-			//}
 		}
 	}
 
 }
 
 void playMidiFile(vector<MidiEvent*> noteOnEvent, RtMidiOut* midiout) {
+	int event = 1;
 	while (true) {
-		if (tickDurationMilseconds > 0)
-		{
-			//play midi messages
-			for (int event = 1; event < noteOnEvent.size(); event++) {
+		//play midi messages
+		while ( event < noteOnEvent.size()) {
+			if (inJump) {
 				midiout->sendMessage(noteOnEvent[event - 1]);
 				int tickDuration = noteOnEvent[event]->tick - noteOnEvent[event - 1]->tick;
 				if (tickDuration) {
 					Sleep(int(tickDuration * tickDurationMilseconds));
-					cout << tickDurationMilseconds << endl;
+					if (event == (noteOnEvent.size() - 1))
+						event = 1;
 				}
-				if (event == (noteOnEvent.size()))
-					event = 1;
+				event = event + 1;
 			}
+			else
+				event = 1;
 		}
 	}
 }
@@ -157,14 +161,13 @@ int main()
 	k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
 	tracker_config.processing_mode = K4ABT_TRACKER_PROCESSING_MODE_GPU;
 	VERIFY(k4abt_tracker_create(&sensor_calibration, tracker_config, &tracker), "Body tracker initialization failed!");
+
+	// Cerate window
 	int frame_count = 0;
 	Window3dWrapper window3d;
 	window3d.Create("3D Visualization", sensor_calibration);
 	window3d.SetCloseCallback(CloseCallback);
 	window3d.SetKeyCallback(ProcessKey);
-
-	//Create training evaluator
-	multiEvaluator evaluator;
 
 	//Creat excel file to write angle data
 	XLDocument doc;
@@ -173,7 +176,7 @@ int main()
 
 	//Creat MIDI file player
 	RtMidiOut* midiout = new RtMidiOut();
-	MidiFile midifile("D:\\training\\MultiTraining\\MultiTraining\\media\\Midi_K525.mid");
+	MidiFile midifile("C:\\Users\\wangr\\training\\Midi_K525.mid");
 	vector<MidiEvent*> noteOnEvent;
 
 	//Creat midifile and print messages
@@ -200,10 +203,12 @@ int main()
 		}
 	}
 
-	// Creat MidiEvent* vector
+	// Creat MidiEvent* vector and set volumn
 	for (int track = 0; track < tracks; track++) {
 		for (int event = 0; event < midifile[track].size(); event++) {
 			if (midifile[track][event].isNoteOn()) {
+				if (midifile[track][event][2] > 10)
+					midifile[track][event][2] = 100;
 				noteOnEvent.push_back(&midifile[track][event]);
 			}
 		}
@@ -221,7 +226,8 @@ int main()
 	// Start play midi tile thread 
 	thread playMidiFIleThread(playMidiFile, noteOnEvent, midiout);
 	playMidiFIleThread.detach();
-	//// Create MIDI player
+
+	//// Create MIDI player for Drum only
 	//HMIDIOUT h;
 	//midiOutOpen(&h, MIDI_MAPPER, 0, 0, 0);
 	//thread playMidiThread(playMidiDrum, h);
@@ -230,9 +236,8 @@ int main()
 	//stopMidiThread.detach();
 
 	//start camera
-	while (s_isRunning)
+	while (true)
 	{
-
 		k4a_capture_t sensor_capture;
 		k4a_wait_result_t get_capture_result = k4a_device_get_capture(device, &sensor_capture, K4A_WAIT_INFINITE);
 		if (get_capture_result == K4A_WAIT_RESULT_SUCCEEDED)
@@ -255,33 +260,50 @@ int main()
 			k4abt_frame_t body_frame = NULL;
 			k4a_wait_result_t pop_frame_result = k4abt_tracker_pop_result(tracker, &body_frame, K4A_WAIT_INFINITE);
 			if (pop_frame_result == K4A_WAIT_RESULT_SUCCEEDED)
-			{
-				totalJumpPer = 0;
+			{   
 				// Successfully popped the body tracking result. Start processing
+				totalJumpPer = 0;
 				k4a_capture_t original_capture = k4abt_frame_get_capture(body_frame);
 				size_t num_bodies = k4abt_frame_get_num_bodies(body_frame);
-				printf("%zu bodies are detected!\n", num_bodies);
-				if (num_bodies > 0)
+				//printf("%zu bodies are detected!\n", num_bodies);
+				if (num_bodies > 0 && s_isRunning)
 				{
-					for (size_t i = 0; i < num_bodies; i++)
-					{
+					int bodyDistanceList[4] = { 0,1,2,3 };
+					if (num_bodies > 1) {
+
+						for (size_t i = 0; i < num_bodies - 1; i++) {
+							for (size_t j = 0; j < num_bodies - 1 - i; j++) {
+								k4abt_body_t bodyPre;
+								k4abt_frame_get_body_skeleton(body_frame, j, &bodyPre.skeleton);
+								k4abt_body_t bodyBack;
+								k4abt_frame_get_body_skeleton(body_frame, j + 1, &bodyPre.skeleton);
+								if (bodyPre.skeleton.joints[K4ABT_JOINT_PELVIS].position.xyz.z > bodyBack.skeleton.joints[K4ABT_JOINT_PELVIS].position.xyz.z) {
+									swap(bodyDistanceList[j], bodyDistanceList[j + 1]);
+								}
+							}
+						}
+					}
+
+					for (size_t i = 0; i < num_bodies; i++){
+
 						k4abt_body_t body;
-						VERIFY(k4abt_frame_get_body_skeleton(body_frame, i, &body.skeleton), "Get skeleton from body frame failed!");
-						body.id = k4abt_frame_get_body_id(body_frame, i);
-						float score = evaluator.vectorEvaluator(body);
-						int jumpPer = evaluator.jumpCounter(body, i, wks);
-						switch (body.id)
+						k4abt_frame_get_body_skeleton(body_frame, bodyDistanceList[i], &body.skeleton);
+
+						//jumpPer = evaluator.squatCounter(body, i, wks);
+						jumpPer = evaluator.jumpCounter(body, bodyDistanceList[i], wks);
+
+						switch (i)
 						{
-						case 1:
+						case 0:
 							printf("1st people jump period: %d\n ", jumpPer);
 							break;
-						case 2:
+						case 1:
 							printf("2nd people jump period: %d\n ", jumpPer);
 							break;
-						case 3:
+						case 2:
 							printf("3rd people jump period: %d\n ", jumpPer);
 							break;
-						case 4:
+						case 3:
 							printf("4st people jump period: %d\n", jumpPer);
 							break;
 						default:
@@ -291,9 +313,13 @@ int main()
 						totalJumpPer = totalJumpPer + jumpPer;
 					}
 					aveJumpPer = totalJumpPer / num_bodies;
+					if (aveJumpPer > 0)
+						inJump = true;
 					printf("The average jump period %f\n", aveJumpPer);
-					tickDurationMilseconds = aveJumpPer / 2 / 480;
-				}
+
+					// Change tick duration here
+					tickDurationMilseconds = aveJumpPer / 2.5 / 480;
+     			}
 
 				// Visualize point cloud
 				k4a_image_t depthImage = k4a_capture_get_depth_image(original_capture);
