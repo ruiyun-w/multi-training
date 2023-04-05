@@ -139,6 +139,11 @@ void stopMidi(HMIDIOUT h) {
 	}
 }
 
+void printWorkbook(const XLWorkbook& wb) {
+	cout << "\nSheets in workbook:\n";
+	for (const auto& name : wb.worksheetNames()) cout << wb.indexOfSheet(name) << " : " << name << "\n";
+}
+
 int main()
 {
 	//open k4a device
@@ -169,10 +174,23 @@ int main()
 	window3d.SetCloseCallback(CloseCallback);
 	window3d.SetKeyCallback(ProcessKey);
 
-	//Creat excel file to write angle data
+	//Creat excel file to write data
 	XLDocument doc;
-	doc.create(".//multiTest.xlsx");
-	auto wks = doc.workbook().worksheet("Sheet1");
+	doc.create(".//test.xlsx");
+	auto wbk = doc.workbook();
+	wbk.addWorksheet("Sheet2");
+	wbk.addWorksheet("Sheet3");
+	wbk.addWorksheet("Sheet4");
+	printWorkbook(wbk);
+	doc.save();
+
+	XLWorksheet wks1 = wbk.sheet("Sheet1");
+	XLWorksheet wks2 = wbk.sheet("Sheet2");
+	XLWorksheet wks3 = wbk.sheet("Sheet3");
+	XLWorksheet wks4 = wbk.sheet("Sheet4");
+
+	vector<XLWorksheet*> wks = { &wks1, &wks2, &wks3, &wks4 };
+
 
 	//Creat MIDI file player
 	RtMidiOut* midiout = new RtMidiOut();
@@ -266,9 +284,11 @@ int main()
 				k4a_capture_t original_capture = k4abt_frame_get_capture(body_frame);
 				size_t num_bodies = k4abt_frame_get_num_bodies(body_frame);
 				//printf("%zu bodies are detected!\n", num_bodies);
+
+				//list the body id by distance
 				if (num_bodies > 0 && s_isRunning)
 				{
-					int bodyDistanceList[4] = { 0,1,2,3 };
+					size_t bodyDistanceList[4] = { 0,1,2,3 };
 					if (num_bodies > 1) {
 
 						for (size_t i = 0; i < num_bodies - 1; i++) {
@@ -276,21 +296,23 @@ int main()
 								k4abt_body_t bodyPre;
 								k4abt_frame_get_body_skeleton(body_frame, j, &bodyPre.skeleton);
 								k4abt_body_t bodyBack;
-								k4abt_frame_get_body_skeleton(body_frame, j + 1, &bodyPre.skeleton);
+								k4abt_frame_get_body_skeleton(body_frame, j + 1, &bodyBack.skeleton);
 								if (bodyPre.skeleton.joints[K4ABT_JOINT_PELVIS].position.xyz.z > bodyBack.skeleton.joints[K4ABT_JOINT_PELVIS].position.xyz.z) {
 									swap(bodyDistanceList[j], bodyDistanceList[j + 1]);
 								}
 							}
 						}
 					}
-
+                    
+					// get the interval
 					for (size_t i = 0; i < num_bodies; i++){
 
 						k4abt_body_t body;
 						k4abt_frame_get_body_skeleton(body_frame, bodyDistanceList[i], &body.skeleton);
 
 						//jumpPer = evaluator.squatCounter(body, i, wks);
-						jumpPer = evaluator.jumpCounter(body, bodyDistanceList[i], wks);
+						jumpPer = evaluator.jumpCounter(body, bodyDistanceList[i], *wks[i]);
+						doc.save();
 
 						switch (i)
 						{
@@ -377,6 +399,9 @@ int main()
 	k4a_device_close(device);
 
 	delete midiout;
+
+	doc.save();
+	doc.close();
 	//midiOutReset(h);
 	//midiOutClose(h);
 	return 0;
