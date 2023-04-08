@@ -22,7 +22,7 @@ public:
 	int squatCounter(k4abt_body_t body, size_t body_num, XLWorksheet sheet);
 	void reset();
 
-	int jumpPeriod[4] = { 0 };
+	int jumpPeriod[4] = { 0, 0, 0 ,0 };
 
 
 private:
@@ -35,11 +35,11 @@ private:
 		{0,22,23,24}
 	};
 	// jumpcount and period for 4 users
-	bool inJump[4] = { false };
+	bool inJump[4] = { false, false, false, false };
 	clock_t thisJumpTime[4] = { 0 };
-	int jumpCount[4] = { 0 };
+	int jumpCount[4] = { 0, 0, 0 ,0 };
 	clock_t preJumpTime[4];
-	int angleRow = 1;
+	int angleRow[4] = { 1, 1, 1, 1 };
 };
 
 void multiEvaluator::reset()
@@ -166,11 +166,11 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, XLWorksheet 
 			preJumpTime[body_num] = thisJumpTime[body_num];
 		}
 		inJump[body_num] = true;
+		jumpCount[body_num] = jumpCount[body_num] + 1;
 	}
 	// if arms down
 	else if ((ANGLE_ARM_LEFT_PELVIS < 30) && (ANGLE_ARM_RIGHT_PELVIS < 30) && (inJump[body_num] == true)) {
 		inJump[body_num] = false;
-		jumpCount[body_num] = jumpCount[body_num] + 1;
 		//cout << jumpCount[body_num] << endl;
 	}
 
@@ -179,12 +179,12 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, XLWorksheet 
 		system_clock::now().time_since_epoch()
 		);
 
-	sheet.cell(angleRow, 1).value() = ms.count();
-	sheet.cell(angleRow, 2).value() = ANGLE_ARM_LEFT_PELVIS;
-	sheet.cell(angleRow, 3).value() = ANGLE_ARM_RIGHT_PELVIS;
-	sheet.cell(angleRow, 4).value() = jumpPeriod[body_num];
-	sheet.cell(angleRow, 5).value() = jumpCount[body_num];
-	angleRow = angleRow + 1;
+	sheet.cell(angleRow[body_num], 1).value() = ms.count();
+	sheet.cell(angleRow[body_num], 2).value() = ANGLE_ARM_LEFT_PELVIS;
+	sheet.cell(angleRow[body_num], 3).value() = ANGLE_ARM_RIGHT_PELVIS;
+	sheet.cell(angleRow[body_num], 4).value() = jumpPeriod[body_num];
+	sheet.cell(angleRow[body_num], 5).value() = jumpCount[body_num];
+	angleRow[body_num] = angleRow[body_num] + 1;
 
 	return jumpPeriod[body_num];
 }
