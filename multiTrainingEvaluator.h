@@ -7,11 +7,14 @@
 #include <time.h>
 #include <OpenXLSX.hpp>
 #include "ExcelFormat.h"
+#include "libxl.h"
 
 using namespace std;
 using namespace std::chrono;
 using namespace OpenXLSX;
-using namespace ExcelFormat;
+
+
+
 class multiEvaluator
 {
 public:
@@ -20,11 +23,11 @@ public:
 	// calculate score for each person
 	float vectorEvaluator(k4abt_body_t body);
 	// count jumps and return jump period time
-	int jumpCounter(k4abt_body_t body, size_t body_num, BasicExcelWorksheet* sheet);
-	int squatCounter(k4abt_body_t body, size_t body_num, BasicExcelWorksheet* sheet);
+	int jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet);
+	int squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet);
 	void reset();
 
-	int jumpPeriod[4] = { 0, 0, 0 ,0 };
+	int jumpPeriod[4] = { 1, 1, 1 ,1 };
 
 
 private:
@@ -41,7 +44,7 @@ private:
 	clock_t thisJumpTime[4] = { 0 };
 	int jumpCount[4] = { 0, 0, 0 ,0 };
 	clock_t preJumpTime[4];
-	int angleRow[4] = { 1, 1, 1, 1 };
+	int angleRow[4] = { 0, 0, 0, 0 };
 };
 
 void multiEvaluator::reset()
@@ -143,7 +146,7 @@ float multiEvaluator::vectorEvaluator(k4abt_body_t body)
 	return distance;
 }
 
-int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, BasicExcelWorksheet* sheet) {
+int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet) {
 	k4abt_joint_t P_NECK = body.skeleton.joints[K4ABT_JOINT_NECK];
 	k4abt_joint_t P_WRIST_RIGHT = body.skeleton.joints[K4ABT_JOINT_WRIST_RIGHT];
 	k4abt_joint_t P_WRIST_LEFT = body.skeleton.joints[K4ABT_JOINT_WRIST_LEFT];
@@ -180,17 +183,17 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, BasicExcelWo
 	milliseconds ms = duration_cast<milliseconds>(
 		system_clock::now().time_since_epoch()
 		);
-	sheet->Cell(angleRow[body_num], 1)->SetInteger(ms.count());
-	sheet->Cell(angleRow[body_num], 2)->SetDouble(ANGLE_ARM_LEFT_PELVIS);
-	sheet->Cell(angleRow[body_num], 3)->SetDouble(ANGLE_ARM_RIGHT_PELVIS);
-	sheet->Cell(angleRow[body_num], 4)->SetInteger(jumpPeriod[body_num]);
-	sheet->Cell(angleRow[body_num], 5)->SetInteger(jumpCount[body_num]);
+	sheet->writeNum(angleRow[body_num], 0, ms.count());
+	sheet->writeNum(angleRow[body_num], 1, ANGLE_ARM_LEFT_PELVIS);
+	sheet->writeNum(angleRow[body_num], 2, ANGLE_ARM_RIGHT_PELVIS);
+	sheet->writeNum(angleRow[body_num], 3, jumpPeriod[body_num]);
+	sheet->writeNum(angleRow[body_num], 4, jumpCount[body_num]);
 	angleRow[body_num] = angleRow[body_num] + 1;
 
 	return jumpPeriod[body_num];
 }
 
-int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, BasicExcelWorksheet* sheet) {
+int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet) {
 	k4abt_joint_t P_HIP_RIGHT = body.skeleton.joints[K4ABT_JOINT_HIP_RIGHT];
 	k4abt_joint_t P_KNEE_RIGHT = body.skeleton.joints[K4ABT_JOINT_KNEE_RIGHT];
 	k4abt_joint_t P_ANKLE_RIGHT = body.skeleton.joints[K4ABT_JOINT_ANKLE_RIGHT];
@@ -220,10 +223,10 @@ int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, BasicExcelW
 	milliseconds ms = duration_cast<milliseconds>(
 		system_clock::now().time_since_epoch()
 		);
-	sheet->Cell(angleRow[body_num], 1)->SetInteger(ms.count());
-	sheet->Cell(angleRow[body_num], 2)->SetDouble(ANGLE_KNEE_PELVIS);
-	sheet->Cell(angleRow[body_num], 3)->SetInteger(jumpPeriod[body_num]);
-	sheet->Cell(angleRow[body_num], 4)->SetInteger(jumpCount[body_num]);
+	sheet->writeNum(angleRow[body_num], 0, ms.count());
+	sheet->writeNum(angleRow[body_num], 1, ANGLE_KNEE_PELVIS);
+	sheet->writeNum(angleRow[body_num], 2, jumpPeriod[body_num]);
+	sheet->writeNum(angleRow[body_num], 3, jumpCount[body_num]);
 	angleRow[body_num] = angleRow[body_num] + 1;
 	return jumpPeriod[body_num];
 }

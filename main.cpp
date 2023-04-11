@@ -30,12 +30,11 @@
 #include <cstdlib>
 #include "RtMidi.h"
 #include <Windows.h>
-#include "ExcelFormat.h"
+#include "libxl.h"
 
 using namespace std;
 using namespace OpenXLSX;
 using namespace smf;
-using namespace ExcelFormat;
 
 #define VERIFY(result, error)                                                                            \
     if(result != K4A_RESULT_SUCCEEDED)                                                                   \
@@ -141,54 +140,18 @@ void stopMidi(HMIDIOUT h) {
 	}
 }
 
-void printWorkbook(const XLWorkbook& wb) {
-	cout << "\nSheets in workbook:\n";
-	for (const auto& name : wb.worksheetNames()) cout << wb.indexOfSheet(name) << " : " << name << "\n";
-}
 
 int main()
 {
-	//open k4a device
-	k4a_device_t device = NULL;
-	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
+	libxl::Book* book = xlCreateBook(); // xlCreateXMLBook() for xlsx
+	libxl::Sheet* sheet1 = book->addSheet(L"Sheet1");
+	libxl::Sheet* sheet2 = book->addSheet(L"Sheet2");
+	libxl::Sheet* sheet3 = book->addSheet(L"Sheet3");
+	libxl::Sheet* sheet4 = book->addSheet(L"Sheet4");
+	libxl::Sheet* sheet5 = book->addSheet(L"Sheet5");
+	vector<libxl::Sheet*> sheets = { sheet1, sheet2, sheet3, sheet4, sheet5 };
+   //Creat excel file to write data
 
-	// Start camera. Make sure depth camera is enabled.
-	k4a_device_configuration_t deviceConfig = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
-	deviceConfig.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
-	deviceConfig.color_resolution = K4A_COLOR_RESOLUTION_OFF;
-	VERIFY(k4a_device_start_cameras(device, &deviceConfig), "Start K4A cameras failed!");
-
-	// Get calibration information
-	k4a_calibration_t sensor_calibration;
-	VERIFY(k4a_device_get_calibration(device, deviceConfig.depth_mode, deviceConfig.color_resolution, &sensor_calibration),
-		"Get depth camera calibration failed!");
-
-	// Create Body Tracker
-	k4abt_tracker_t tracker = NULL;
-	k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
-	tracker_config.processing_mode = K4ABT_TRACKER_PROCESSING_MODE_GPU;
-	VERIFY(k4abt_tracker_create(&sensor_calibration, tracker_config, &tracker), "Body tracker initialization failed!");
-
-	// Cerate window
-	int frame_count = 0;
-	Window3dWrapper window3d;
-	window3d.Create("3D Visualization", sensor_calibration);
-	window3d.SetCloseCallback(CloseCallback);
-	window3d.SetKeyCallback(ProcessKey);
-
-	//Creat excel file to write data
-	BasicExcel xls;
-
-	// create sheet 1 and get the associated BasicExcelWorksheet pointer
-	xls.New(5);
-	BasicExcelWorksheet* sheet1 = xls.GetWorksheet(0);
-	BasicExcelWorksheet* sheet2 = xls.GetWorksheet(0);
-	BasicExcelWorksheet* sheet3 = xls.GetWorksheet(0);
-	BasicExcelWorksheet* sheet4 = xls.GetWorksheet(0);
-	BasicExcelWorksheet* sheet5 = xls.GetWorksheet(0);
-
-	vector<BasicExcelWorksheet*> sheets = { sheet1, sheet2, sheet3, sheet4, sheet5 };
-	xls.SaveAs(".//testNew.xlsx");
 
 	//Creat MIDI file playe2
 	RtMidiOut* midiout = new RtMidiOut();
@@ -250,7 +213,34 @@ int main()
 	//playMidiThread.detach();
 	//thread stopMidiThread(stopMidi, h);
 	//stopMidiThread.detach();
+	
+	//open k4a device
+	k4a_device_t device = NULL;
+	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
 
+	// Start camera. Make sure depth camera is enabled.
+	k4a_device_configuration_t deviceConfig = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
+	deviceConfig.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
+	deviceConfig.color_resolution = K4A_COLOR_RESOLUTION_OFF;
+	VERIFY(k4a_device_start_cameras(device, &deviceConfig), "Start K4A cameras failed!");
+
+	// Get calibration information
+	k4a_calibration_t sensor_calibration;
+	VERIFY(k4a_device_get_calibration(device, deviceConfig.depth_mode, deviceConfig.color_resolution, &sensor_calibration),
+		"Get depth camera calibration failed!");
+
+	// Create Body Tracker
+	k4abt_tracker_t tracker = NULL;
+	k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
+	tracker_config.processing_mode = K4ABT_TRACKER_PROCESSING_MODE_GPU;
+	VERIFY(k4abt_tracker_create(&sensor_calibration, tracker_config, &tracker), "Body tracker initialization failed!");
+
+	// Cerate window
+	int frame_count = 0;
+	Window3dWrapper window3d;
+	window3d.Create("3D Visualization", sensor_calibration);
+	window3d.SetCloseCallback(CloseCallback);
+	window3d.SetKeyCallback(ProcessKey);
 	//start camera
 	while (true)
 	{
@@ -312,10 +302,10 @@ int main()
 						//jumpPer = evaluator.squatCounter(body, i, wks);
 						jumpPer = evaluator.jumpCounter(body, bodyId, sheets[bodyId]);
 						totalJumpPer = totalJumpPer + jumpPer;
-						sheets[4]->Cell(averageRow, body.id)->SetInteger(jumpPer);
+						sheets[4]->writeNum(averageRow, bodyId, jumpPer);
 					}
 					aveJumpPer = totalJumpPer / num_bodies;
-					sheets[4]->Cell(averageRow, 5)->SetInteger(aveJumpPer);
+					sheets[4]->writeNum(averageRow, 4, aveJumpPer);
 					if (aveJumpPer > 1500 && aveJumpPer < 4000) {
 						// Change tick duration here
 						tickDurationMilseconds = aveJumpPer / 2.5 / 480;
@@ -323,6 +313,7 @@ int main()
 					}
 					printf("The average jump period %f\n", aveJumpPer);
 					averageRow = averageRow + 1;
+					book->save(L"example.xls");
      			}
 
 				// Visualize point cloud
@@ -381,6 +372,6 @@ int main()
 	k4a_device_close(device);
 
 	delete midiout;
-	xls.Save();
+	book->release();
 	return 0;
 }
