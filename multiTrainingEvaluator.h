@@ -6,7 +6,6 @@
 #include <chrono>
 #include <time.h>
 #include <OpenXLSX.hpp>
-#include "ExcelFormat.h"
 #include "libxl.h"
 
 using namespace std;
@@ -27,7 +26,7 @@ public:
 	int squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet);
 	void reset();
 
-	int jumpPeriod[4] = { 1, 1, 1 ,1 };
+	int jumpPeriod[4] = { 0, 0, 0 ,0 };
 
 
 private:
@@ -200,7 +199,7 @@ int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, libxl::Shee
 
 	float ANGLE_KNEE_PELVIS = getAngle(P_HIP_RIGHT.position, P_KNEE_RIGHT.position, P_ANKLE_RIGHT.position);
 	// if squat down
-	if ((ANGLE_KNEE_PELVIS < 75) && (inJump[body_num] == false)) {
+	if ((ANGLE_KNEE_PELVIS < 120) && (inJump[body_num] == false)) {
 		//for first jump
 		if (jumpCount[body_num] == 0) {
 			preJumpTime[body_num] = clock();

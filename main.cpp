@@ -98,10 +98,10 @@ void printAppUsage()
 }
 
 void playMidiDrum(HMIDIOUT h) {
-	midiOutShortMsg(h, 0x73c0);  
+	midiOutShortMsg(h, 0x73c0);
 	while (true) {
 		if (midiInterval > 0) {
-			midiOutShortMsg(h, 0x7f4390);  
+			midiOutShortMsg(h, 0x7f4390);
 			Sleep(midiInterval);
 		}
 	}
@@ -112,7 +112,7 @@ void playMidiFile(vector<MidiEvent*> noteOnEvent, RtMidiOut* midiout) {
 	int event = 1;
 	while (true) {
 		//play midi messages
-		while ( event < noteOnEvent.size()) {
+		while (event < noteOnEvent.size()) {
 			if (inJump) {
 				midiout->sendMessage(noteOnEvent[event - 1]);
 				int tickDuration = noteOnEvent[event]->tick - noteOnEvent[event - 1]->tick;
@@ -150,12 +150,12 @@ int main()
 	libxl::Sheet* sheet4 = book->addSheet(L"Sheet4");
 	libxl::Sheet* sheet5 = book->addSheet(L"Sheet5");
 	vector<libxl::Sheet*> sheets = { sheet1, sheet2, sheet3, sheet4, sheet5 };
-   //Creat excel file to write data
+	//Creat excel file to write data
 
 
-	//Creat MIDI file playe2
+	 //Creat MIDI file playe2
 	RtMidiOut* midiout = new RtMidiOut();
-	MidiFile midifile("C:\\Users\\wangr\\training\\Midi_K525.mid");
+	MidiFile midifile("D:\\training\\MultiTraining\\MultiTraining\\media\\Midi_K525.mid");
 	vector<MidiEvent*> noteOnEvent;
 
 	//Creat midifile and print messages
@@ -213,7 +213,7 @@ int main()
 	//playMidiThread.detach();
 	//thread stopMidiThread(stopMidi, h);
 	//stopMidiThread.detach();
-	
+
 	//open k4a device
 	k4a_device_t device = NULL;
 	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
@@ -266,7 +266,7 @@ int main()
 			k4abt_frame_t body_frame = NULL;
 			k4a_wait_result_t pop_frame_result = k4abt_tracker_pop_result(tracker, &body_frame, K4A_WAIT_INFINITE);
 			if (pop_frame_result == K4A_WAIT_RESULT_SUCCEEDED)
-			{   
+			{
 				// Successfully popped the body tracking result. Start processing
 				totalJumpPer = 0;
 				k4a_capture_t original_capture = k4abt_frame_get_capture(body_frame);
@@ -291,16 +291,16 @@ int main()
 					//		}
 					//	}
 					//}
-                    
+
 					// get the interval
-					for (size_t i = 0; i < num_bodies; i++){
+					for (size_t i = 0; i < num_bodies; i++) {
 
 						k4abt_body_t body;
 						k4abt_frame_get_body_skeleton(body_frame, i, &body.skeleton);
 						body.id = k4abt_frame_get_body_id(body_frame, i);
 						size_t bodyId = body.id - 1;
 						//jumpPer = evaluator.squatCounter(body, i, wks);
-						jumpPer = evaluator.jumpCounter(body, bodyId, sheets[bodyId]);
+						jumpPer = evaluator.squatCounter(body, bodyId, sheets[bodyId]);
 						totalJumpPer = totalJumpPer + jumpPer;
 						sheets[4]->writeNum(averageRow, bodyId, jumpPer);
 					}
@@ -314,7 +314,7 @@ int main()
 					printf("The average jump period %f\n", aveJumpPer);
 					averageRow = averageRow + 1;
 					book->save(L"example.xls");
-     			}
+				}
 
 				// Visualize point cloud
 				k4a_image_t depthImage = k4a_capture_get_depth_image(original_capture);
