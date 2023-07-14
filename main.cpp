@@ -53,15 +53,22 @@ double tickDurationMilseconds;
 int averageRow = 1;
 //Create training evaluator
 multiEvaluator evaluator;
+std::chrono::high_resolution_clock::time_point beginTime;
+std::chrono::high_resolution_clock::time_point nowTime;
+bool bellExecuted = false;
+
+
 
 void playBell() {
-	PlaySound(TEXT("D:\\training\\MultiTraining\\MultiTraining\\media\\small-bell.wav"), NULL, SND_FILENAME);
+	PlaySound(TEXT("C:\\Users\\wangr\\training\\bell.wav"), NULL, SND_FILENAME);
 	return;
 }
 
 void startTraining() {
 	s_isRunning = true;
-	playBell();
+	beginTime = std::chrono::high_resolution_clock::now();
+	thread playBellThread(playBell);
+	playBellThread.detach();
 	return;
 }
 
@@ -88,7 +95,7 @@ int64_t ProcessKey(void* /*context*/, int key)
 		break;
 	case GLFW_KEY_SPACE:
 		startTraining();
-		printf("RESTART");
+		printf("STARTED");
 		break;
 	}
 	return 1;
@@ -170,7 +177,7 @@ int main()
 
 	 //Creat MIDI file playe2
 	RtMidiOut* midiout = new RtMidiOut();
-	MidiFile midifile("D:\\training\\MultiTraining\\MultiTraining\\media\\Midi_K525.mid");
+	MidiFile midifile("C:\\Users\\wangr\\training\\Midi_K525.mid");
 	vector<MidiEvent*> noteOnEvent;
 
 	//Creat midifile and print messages
@@ -230,13 +237,6 @@ int main()
 	//stopMidiThread.detach();
 
 	// Create timer thread
-	int durationInSeconds = 40;
-	bool callbackExecuted = false;
-	thread timerThread([durationInSeconds]() {
-		// Sleep for the specified duration
-		this_thread::sleep_for(chrono::seconds(durationInSeconds));
-		playBell();
-		});
 	//open k4a device
 	k4a_device_t device = NULL;
 	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
@@ -266,7 +266,7 @@ int main()
 	window3d.SetKeyCallback(ProcessKey);
 	//start camera
 	while (true)
-	{   
+	{
 		k4a_capture_t sensor_capture;
 		k4a_wait_result_t get_capture_result = k4a_device_get_capture(device, &sensor_capture, K4A_WAIT_INFINITE);
 		if (get_capture_result == K4A_WAIT_RESULT_SUCCEEDED)
@@ -299,9 +299,13 @@ int main()
 				//list the body id by distance
 				if (num_bodies > 0 && s_isRunning)
 				{
-					if (!callbackExecuted) {
-						timerThread.detach();
-						callbackExecuted = true;
+					nowTime = std::chrono::high_resolution_clock::now();
+					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(nowTime - beginTime).count();
+					if (duration > 40000 && !bellExecuted) {
+						cout << duration<< endl;
+						thread playBellThread(playBell);
+						playBellThread.detach();
+						bellExecuted = true;
 					}
 					//size_t bodyDistanceList[4] = { 0,1,2,3 };
 					//if (num_bodies > 1) {
@@ -327,13 +331,14 @@ int main()
 						body.id = k4abt_frame_get_body_id(body_frame, i);
 						size_t bodyId = body.id - 1;
 						// jumpPer = evaluator.squatCounter(body, i, wks);
-						jumpPer = evaluator.squatCounter(body, bodyId, sheets[bodyId]);
+						jumpPer = evaluator.squatCounter(body, bodyId, sheets[bodyId], duration);
 						totalJumpPer = totalJumpPer + jumpPer;
 						sheets[4]->writeNum(averageRow, bodyId, jumpPer);
 					}
 					aveJumpPer = totalJumpPer / num_bodies;
 					sheets[4]->writeNum(averageRow, 4, aveJumpPer);
-					if (evaluator.jumpPeriod[0] && evaluator.jumpPeriod[1] && evaluator.jumpPeriod[2 ]) {
+					sheets[4]->writeNum(averageRow, 5, duration);
+					if (evaluator.jumpPeriod[0] && evaluator.jumpPeriod[1] && evaluator.jumpPeriod[2]) {
 						// Change tick duration here
 						tickDurationMilseconds = aveJumpPer / 2 / 480;
 						inJump = true;

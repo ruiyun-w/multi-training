@@ -22,8 +22,8 @@ public:
 	// calculate score for each person
 	float vectorEvaluator(k4abt_body_t body);
 	// count jumps and return jump period time
-	int jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet);
-	int squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet);
+	int jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet, long long duration);
+	int squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet, long long duration);
 	void reset();
 
 	int jumpPeriod[4] = { 0, 0, 0 ,0 };
@@ -145,7 +145,7 @@ float multiEvaluator::vectorEvaluator(k4abt_body_t body)
 	return distance;
 }
 
-int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet) {
+int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet, long long duration) {
 	k4abt_joint_t P_NECK = body.skeleton.joints[K4ABT_JOINT_NECK];
 	k4abt_joint_t P_WRIST_RIGHT = body.skeleton.joints[K4ABT_JOINT_WRIST_RIGHT];
 	k4abt_joint_t P_WRIST_LEFT = body.skeleton.joints[K4ABT_JOINT_WRIST_LEFT];
@@ -179,10 +179,7 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet
 	}
 
 	//write angles to excel 
-	milliseconds ms = duration_cast<milliseconds>(
-		system_clock::now().time_since_epoch()
-		);
-	sheet->writeNum(angleRow[body_num], 0, ms.count());
+	sheet->writeNum(angleRow[body_num], 0, duration);
 	sheet->writeNum(angleRow[body_num], 1, ANGLE_ARM_LEFT_PELVIS);
 	sheet->writeNum(angleRow[body_num], 2, ANGLE_ARM_RIGHT_PELVIS);
 	sheet->writeNum(angleRow[body_num], 3, jumpPeriod[body_num]);
@@ -192,7 +189,7 @@ int multiEvaluator::jumpCounter(k4abt_body_t body, size_t body_num, libxl::Sheet
 	return jumpPeriod[body_num];
 }
 
-int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet) {
+int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, libxl::Sheet* sheet, long long duration) {
 	k4abt_joint_t P_HIP_RIGHT = body.skeleton.joints[K4ABT_JOINT_HIP_RIGHT];
 	k4abt_joint_t P_KNEE_RIGHT = body.skeleton.joints[K4ABT_JOINT_KNEE_RIGHT];
 	k4abt_joint_t P_ANKLE_RIGHT = body.skeleton.joints[K4ABT_JOINT_ANKLE_RIGHT];
@@ -218,10 +215,7 @@ int multiEvaluator::squatCounter(k4abt_body_t body, size_t body_num, libxl::Shee
 		jumpCount[body_num] = jumpCount[body_num] + 1;
 	}
 
-	milliseconds ms = duration_cast<milliseconds>(
-		system_clock::now().time_since_epoch()
-		);
-	sheet->writeNum(angleRow[body_num], 0, ms.count());
+	sheet->writeNum(angleRow[body_num], 0, duration);
 	sheet->writeNum(angleRow[body_num], 1, ANGLE_KNEE_PELVIS);
 	sheet->writeNum(angleRow[body_num], 2, jumpPeriod[body_num]);
 	sheet->writeNum(angleRow[body_num], 3, jumpCount[body_num]);
