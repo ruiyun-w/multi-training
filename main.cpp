@@ -43,7 +43,7 @@ using namespace smf;
         exit(1);                                                                                         \
     }       
 // control evaluation
-bool s_isRunning = true;
+bool s_isRunning = false;
 bool inJump = false;
 int totalJumpPer = 0;
 float aveJumpPer = 0;
@@ -51,9 +51,30 @@ int midiInterval = 0;
 int jumpPer = 0;
 double tickDurationMilseconds;
 int averageRow = 1;
-
 //Create training evaluator
 multiEvaluator evaluator;
+
+void playBell() {
+	PlaySound(TEXT("D:\\training\\MultiTraining\\MultiTraining\\media\\small-bell.wav"), NULL, SND_FILENAME);
+	return;
+}
+
+void startTraining() {
+	s_isRunning = true;
+	playBell();
+	return;
+}
+
+void stopTraining() {
+	s_isRunning = false;
+	inJump = false;
+	jumpPer = 0;
+	totalJumpPer = 0;
+	aveJumpPer = 0;
+	tickDurationMilseconds = 0;
+	evaluator.reset();
+	return;
+}
 
 int64_t ProcessKey(void* /*context*/, int key)
 {
@@ -62,17 +83,11 @@ int64_t ProcessKey(void* /*context*/, int key)
 	{
 		// Quit
 	case GLFW_KEY_ESCAPE:
-		s_isRunning = false;
-		inJump = false;
-		jumpPer = 0;
-		totalJumpPer = 0;
-		aveJumpPer = 0;
-		tickDurationMilseconds = 0;
-		evaluator.reset();
+		stopTraining();
 		printf("STOPED");
 		break;
 	case GLFW_KEY_SPACE:
-		s_isRunning = true;
+		startTraining();
 		printf("RESTART");
 		break;
 	}
@@ -214,6 +229,14 @@ int main()
 	//thread stopMidiThread(stopMidi, h);
 	//stopMidiThread.detach();
 
+	// Create timer thread
+	int durationInSeconds = 40;
+	bool callbackExecuted = false;
+	thread timerThread([durationInSeconds]() {
+		// Sleep for the specified duration
+		this_thread::sleep_for(chrono::seconds(durationInSeconds));
+		playBell();
+		});
 	//open k4a device
 	k4a_device_t device = NULL;
 	VERIFY(k4a_device_open(0, &device), "Open K4A Device failed!");
@@ -243,7 +266,7 @@ int main()
 	window3d.SetKeyCallback(ProcessKey);
 	//start camera
 	while (true)
-	{
+	{   
 		k4a_capture_t sensor_capture;
 		k4a_wait_result_t get_capture_result = k4a_device_get_capture(device, &sensor_capture, K4A_WAIT_INFINITE);
 		if (get_capture_result == K4A_WAIT_RESULT_SUCCEEDED)
@@ -276,6 +299,10 @@ int main()
 				//list the body id by distance
 				if (num_bodies > 0 && s_isRunning)
 				{
+					if (!callbackExecuted) {
+						timerThread.detach();
+						callbackExecuted = true;
+					}
 					//size_t bodyDistanceList[4] = { 0,1,2,3 };
 					//if (num_bodies > 1) {
 
@@ -306,14 +333,14 @@ int main()
 					}
 					aveJumpPer = totalJumpPer / num_bodies;
 					sheets[4]->writeNum(averageRow, 4, aveJumpPer);
-					if (evaluator.jumpPeriod[0] && evaluator.jumpPeriod[1] && evaluator.jumpPeriod[2]) {
+					if (evaluator.jumpPeriod[0] && evaluator.jumpPeriod[1] && evaluator.jumpPeriod[2 ]) {
 						// Change tick duration here
 						tickDurationMilseconds = aveJumpPer / 2 / 480;
 						inJump = true;
 					}
 					printf("The average jump period %f\n", aveJumpPer);
 					averageRow = averageRow + 1;
-					book->save(L"user3realtimeFeedback0419.xls");
+					book->save(L"test0714.xls");
 				}
 
 				// Visualize point cloud
